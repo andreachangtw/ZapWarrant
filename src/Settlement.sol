@@ -20,16 +20,6 @@ contract Settlement is IWarrant, IWarrantPair{
         quoteToken = _quoteToken;
     }
 
-    function approveBaseToken(uint256 amount) public returns (bool){
-        IERC20(baseToken).approve(address(this), amount);
-        return true;
-    }
-
-    function approveQuoteToken(uint256 amount) public returns (bool){
-        IERC20(quoteToken).approve(address(this), amount);
-        return true;
-    }
-
     function escrowCall(Warrant memory warrant) public returns (bool){
         _checkValidTokensForThisVenue(warrant);
 

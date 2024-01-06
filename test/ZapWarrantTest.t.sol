@@ -42,7 +42,7 @@ contract ZapWarrantTest is Test, IWarrant {
 
         factory = new WarrantFactory();
         if (factory.getWarrantPair(address(UNI), address(USDT)) == WarrantPair(address(0))) {
-            pair = factory.createWarrantPair(address(UNI), address(USDT), new MockChainlinkAggregator());
+            pair = factory.createWarrantPair(address(UNI), address(USDT));
         } else {
             pair = factory.getWarrantPair(address(UNI), address(USDT));
         }

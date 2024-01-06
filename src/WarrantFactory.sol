@@ -3,6 +3,7 @@ pragma solidity ^0.8.19;
 
 import "./Settlement.sol";
 import "./WarrantPair.sol";
+import "./MockChainlinkAggregator.sol";
 
 contract WarrantFactory {
 
@@ -16,11 +17,11 @@ contract WarrantFactory {
         return warrantPairs[_baseToken][_quoteToken];
     }
 
-    function createWarrantPair(address _baseToken, address _quoteToken, MockChainlinkAggregator _priceFeed) public returns (WarrantPair) {
+    function createWarrantPair(address _baseToken, address _quoteToken) public returns (WarrantPair) {
         require(address(warrantPairs[_baseToken][_quoteToken]) == address(0), "WarrantPair exists");
 
         Settlement newSettlement = new Settlement(_baseToken, _quoteToken);
-        WarrantPair newWarrantPair = new WarrantPair(newSettlement, msg.sender, _baseToken, _quoteToken, _priceFeed);
+        WarrantPair newWarrantPair = new WarrantPair(newSettlement, msg.sender, _baseToken, _quoteToken, new MockChainlinkAggregator());
 
         warrantPairs[_baseToken][_quoteToken] = newWarrantPair;
         warrantPairs[_quoteToken][_baseToken] = newWarrantPair; // symmetric
