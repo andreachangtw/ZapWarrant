@@ -6,6 +6,7 @@ import {Settlement} from "src/Settlement.sol";
 import {WarrantPair} from "src/WarrantPair.sol";
 import {IWarrant} from "interfaces/IWarrant.sol";
 import {MockChainlinkAggregator} from "src/MockChainlinkAggregator.sol";
+import {WarrantFactory} from "src/WarrantFactory.sol";
 
 contract MyToken is ERC20 {
     constructor(string memory name, string memory symbol)
@@ -28,7 +29,8 @@ contract ZapWarrantTest is Test, IWarrant {
     MyToken UNI = new MyToken("UNI", "UNI");
     MyToken USDT = new MyToken("USDT", "USDT");
 
-    MockChainlinkAggregator public mockPriceFeed;
+    WarrantFactory public factory;
+    MockChainlinkAggregator mockPriceFeed;
     Settlement public settlement;
     WarrantPair public pair;
 
@@ -38,9 +40,15 @@ contract ZapWarrantTest is Test, IWarrant {
         buyer = makeAddr("buyer");
         buyer2 = makeAddr("buyer2");
 
-        mockPriceFeed = new MockChainlinkAggregator();
-        settlement = new Settlement(address(UNI), address(USDT));
-        pair = new WarrantPair(settlement, admin, address(UNI), address(USDT), mockPriceFeed);
+        factory = new WarrantFactory();
+        if (factory.getWarrantPair(address(UNI), address(USDT)) == WarrantPair(address(0))) {
+            pair = factory.createWarrantPair(address(UNI), address(USDT), new MockChainlinkAggregator());
+        } else {
+            pair = factory.getWarrantPair(address(UNI), address(USDT));
+        }
+
+        settlement = pair.settlement();
+        mockPriceFeed = pair.mockPriceFeed();
 
         // deal seller some UNI and USDT
         deal(address(UNI), seller, 10 * 10 ** UNI.decimals());

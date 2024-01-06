@@ -11,7 +11,7 @@ import "./MockChainlinkAggregator.sol";
 contract WarrantPair is IWarrant, IWarrantPair{
 
     // AggregatorV3Interface internal priceFeed;
-    MockChainlinkAggregator internal mockPriceFeed;
+    MockChainlinkAggregator public mockPriceFeed;
 
     address public admin;
     mapping(uint256 => Warrant) public warrants;
