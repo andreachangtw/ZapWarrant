@@ -5,8 +5,13 @@ import "../interfaces/IWarrantPair.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "./Settlement.sol";
+// import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
+import "./MockChainlinkAggregator.sol";
 
 contract WarrantPair is IWarrant, IWarrantPair{
+
+    // AggregatorV3Interface internal priceFeed;
+    MockChainlinkAggregator internal mockPriceFeed;
 
     address public admin;
     mapping(uint256 => Warrant) public warrants;
@@ -15,11 +20,13 @@ contract WarrantPair is IWarrant, IWarrantPair{
     address public baseToken;
     address public quoteToken;
 
-    constructor(Settlement _settlement, address _admin, address _baseToken, address _quoteToken) public {
+    constructor(Settlement _settlement, address _admin, address _baseToken, address _quoteToken, MockChainlinkAggregator _mockPriceFeed) public {
         settlement = _settlement;
         admin = _admin;
         baseToken = _baseToken;
         quoteToken = _quoteToken;
+        // priceFeed = AggregatorV3Interface(_priceFeed);
+        mockPriceFeed = _mockPriceFeed;
     }
 
     function sellWarrant( 
@@ -151,18 +158,18 @@ contract WarrantPair is IWarrant, IWarrantPair{
         // check sender is buyer
         require(warrant.buyer == msg.sender, "Sender not buyer");
 
+        uint256 latestPrice = _getLatestPrice();
+
         if(warrant.warrantType == WarrantType.CALL) {
             if(_isCashSettled) {
-                // check moneyness
-                uint256 latestPrice = _getLatestPrice();
-                if(warrant.strikePrice >= latestPrice) {
-                    // out of money, return call
-                    bool success = settlement.returnCall(warrant);
-                    require(success, "Return call failed");
-                } else {
+                if(_isInTheMoney(warrant, latestPrice)) {
                     // use settlement contract to exercise and check if success
                     bool success = settlement.exerciseCallCash(warrant, latestPrice);
                     require(success, "Exercise call failed");
+                } else {
+                    // out of money, return call
+                    bool success = settlement.returnCall(warrant);
+                    require(success, "Return call failed");
                 }
                 warrant.isCashSettled = true;
             } else {
@@ -172,16 +179,14 @@ contract WarrantPair is IWarrant, IWarrantPair{
             }
         } else if (warrant.warrantType == WarrantType.PUT) {
             if(_isCashSettled) {
-                // check moneyness
-                uint256 latestPrice = _getLatestPrice();
-                if(warrant.strikePrice <= latestPrice) {
-                    // out of money, return put
-                    bool success = settlement.returnPut(warrant);
-                    require(success, "Return put failed");
-                } else {
+                if(_isInTheMoney(warrant, latestPrice)) {
                     // use settlement contract to exercise and check if success
                     bool success = settlement.exercisePutCash(warrant, latestPrice);
                     require(success, "Exercise put failed");
+                } else {
+                    // out of money, return put
+                    bool success = settlement.returnPut(warrant);
+                    require(success, "Return put failed");
                 }
                 warrant.isCashSettled = true;
             } else {
@@ -211,9 +216,6 @@ contract WarrantPair is IWarrant, IWarrantPair{
             (warrant.status == WarrantStatus.SOLD && block.timestamp >= warrant.maturity + 1 days), 
             "Warrant not eligible for expire"
         );
-
-        // check sender is admin
-        require(msg.sender == admin, "Sender not admin");
 
         // call
         if(warrant.warrantType == WarrantType.CALL) {
@@ -251,6 +253,23 @@ contract WarrantPair is IWarrant, IWarrantPair{
     }
 
     function _getLatestPrice() internal view returns (uint256) {
+        // (,int price,,,) = priceFeed.latestRoundData();
+        // price is multiplied by priceFeed.decimals()
+
+        // mock price feed and convert to quote token decimals
+        (,int tempPrice,,,) = mockPriceFeed.latestRoundData();
+        uint256 price = uint256(tempPrice) * (10 ** ERC20(quoteToken).decimals()) / (10 ** mockPriceFeed.decimals());
+        return uint256(price);
+    }
+
+    function _isInTheMoney(Warrant memory warrant, uint256 latestPrice) internal view returns (bool) {
+        if(warrant.warrantType == WarrantType.CALL) {
+            return warrant.strikePrice < latestPrice;
+        } else if (warrant.warrantType == WarrantType.PUT) {
+            return warrant.strikePrice > latestPrice;
+        } else {
+            revert("Warrant type not correct");
+        }
     }
 
 }

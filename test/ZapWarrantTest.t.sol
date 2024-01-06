@@ -5,6 +5,7 @@ import {Test, console2} from "forge-std/Test.sol";
 import {Settlement} from "src/Settlement.sol";
 import {WarrantPair} from "src/WarrantPair.sol";
 import {IWarrant} from "interfaces/IWarrant.sol";
+import {MockChainlinkAggregator} from "src/MockChainlinkAggregator.sol";
 
 contract MyToken is ERC20 {
     constructor(string memory name, string memory symbol)
@@ -26,6 +27,7 @@ contract ZapWarrantTest is Test, IWarrant {
     MyToken UNI = new MyToken("UNI", "UNI");
     MyToken USDT = new MyToken("USDT", "USDT");
 
+    MockChainlinkAggregator public mockPriceFeed;
     Settlement public settlement;
     WarrantPair public pair;
 
@@ -34,8 +36,9 @@ contract ZapWarrantTest is Test, IWarrant {
         seller = makeAddr("seller");
         buyer = makeAddr("buyer");
 
+        mockPriceFeed = new MockChainlinkAggregator();
         settlement = new Settlement(address(UNI), address(USDT));
-        pair = new WarrantPair(settlement, admin, address(UNI), address(USDT));
+        pair = new WarrantPair(settlement, admin, address(UNI), address(USDT), mockPriceFeed);
 
         // deal seller some UNI and USDT
         deal(address(UNI), seller, 1000 * 10 ** UNI.decimals());
@@ -47,63 +50,49 @@ contract ZapWarrantTest is Test, IWarrant {
     }
 
     function test_sellCall() public {
+        IWarrant.WarrantType warrantType = IWarrant.WarrantType.CALL;
+        uint256 strikePrice = 5 * 10 ** USDT.decimals();
+        uint256 maturity = block.timestamp + 7 days;
+        uint256 baseAmount = 1 * 10 ** UNI.decimals();
+        uint256 premium = 12 * 10 ** USDT.decimals() / 10;
+
         vm.startPrank(seller);
-
-        // allow settlement to spend 10 UNI
-        UNI.approve(address(settlement), 10 * 10 ** UNI.decimals());
-
-        // warrant type is call
-        // strike price is 7
-        // maturity is 3 days later
-        // base amount is 10 UNI
-        // premium is 1 USDT
-        pair.sellWarrant(
-            IWarrant.WarrantType.CALL,
-            7 * 10 ** UNI.decimals(),
-            block.timestamp + 3 days,
-            10 * 10 ** UNI.decimals(),
-            1 * 10 ** USDT.decimals()
-        );
-
+        // allow settlement to spend baseAmount
+        UNI.approve(address(settlement), baseAmount); 
+        pair.sellWarrant(warrantType, strikePrice, maturity, baseAmount, premium);
         vm.stopPrank();
-
-        // warrant map
-        Warrant[] memory warrants = pair.getWarrants();
-        // print warrants
-
     }
 
     function test_buyCall() public {
         test_sellCall();
 
         vm.startPrank(buyer);
-
-        // allow settlement to spend 100 USDT
-        USDT.approve(address(settlement), 100 * 10 ** USDT.decimals());
-
+        // allow settlement to spend premium and quoteAmount
+        USDT.approve(address(settlement), pair.getWarrant(1).premium + pair.getWarrant(1).quoteAmount);
         // buy warrant id 1
         pair.buyWarrant(1);
-
         vm.stopPrank();
-
-        Warrant memory warrant = pair.getWarrant(1);
     }
 
-    function test_exerciseCall() public {
+    function test_exerciseCallActual() public {
         test_buyCall();
-
-        // forward time 3 days
-        uint256 threeDaysInSeconds = 3 * 24 * 60 * 60;
-        vm.warp(block.timestamp + threeDaysInSeconds);
+        _forwardDays(7);
 
         vm.startPrank(buyer);
-
         // exercise warrant id 1
         pair.exerciseWarrant(1, false);
-
         vm.stopPrank();
+    }
 
-        Warrant memory warrant = pair.getWarrant(1);
+    function test_exerciseCallCash() public {
+        test_buyCall();
+        _forwardDays(7);
+        _priceGoesUp();
+
+        vm.startPrank(buyer);
+        // exercise warrant id 1
+        pair.exerciseWarrant(1, true);
+        vm.stopPrank();
     }
 
     function test_cancelCall() public {
@@ -112,22 +101,30 @@ contract ZapWarrantTest is Test, IWarrant {
         vm.startPrank(seller);
         pair.cancelWarrant(1);
         vm.stopPrank();
-
-        Warrant memory warrant = pair.getWarrant(1);
     }
 
     function test_expireCall() public {
         test_sellCall();
-
-        // forward time 3 days
-        uint256 threeDaysInSeconds = 3 * 24 * 60 * 60;
-        vm.warp(block.timestamp + threeDaysInSeconds);
+        _forwardDays(7);
 
         vm.startPrank(admin);
         pair.expireWarrant(1);
         vm.stopPrank();
+    }
 
-        Warrant memory warrant = pair.getWarrant(1);
+    function _priceGoesUp() public {
+        // set mock price feed to 8
+        mockPriceFeed.setPrice(8 * 10 ** mockPriceFeed.decimals());
+    }
+
+    function _priceGoesDown() public {
+        // set mock price feed to 4
+        mockPriceFeed.setPrice(4 * 10 ** mockPriceFeed.decimals());
+    }
+
+    function _forwardDays(uint256 daysToForward) public {
+        uint256 secondsToForward = daysToForward * 24 * 60 * 60;
+        vm.warp(block.timestamp + secondsToForward);
     }
 
 }

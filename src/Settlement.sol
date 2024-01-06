@@ -146,7 +146,7 @@ contract Settlement is IWarrant, IWarrantPair{
         _checkValidTokensForThisVenue(warrant);
 
         // calculate settle amount
-        uint256 settleAmount = (latestPrice - warrant.strikePrice) / latestPrice * warrant.baseAmount;
+        uint256 settleAmount = (latestPrice - warrant.strikePrice) * warrant.baseAmount / latestPrice;
 
         // pay settleAmount to buyer and return the rest to seller
         require(sellerBaseBalances[warrant.seller] >= warrant.baseAmount, "Seller base balance not enough");
