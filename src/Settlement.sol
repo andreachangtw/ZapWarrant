@@ -163,7 +163,7 @@ contract Settlement is IWarrant, IWarrantPair{
         _checkValidTokensForThisVenue(warrant);
 
         // calculate settle amount
-        uint256 settleAmount = (warrant.strikePrice - latestPrice) * warrant.baseAmount;
+        uint256 settleAmount = (warrant.strikePrice - latestPrice) / (10 ** ERC20(baseToken).decimals()) * warrant.baseAmount;
 
         // pay settleAmount to buyer and return the rest to seller
         require(sellerQuoteBalances[warrant.seller] >= warrant.quoteAmount, "Seller quote balance not enough");

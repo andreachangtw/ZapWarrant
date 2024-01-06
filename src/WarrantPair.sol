@@ -252,6 +252,10 @@ contract WarrantPair is IWarrant, IWarrantPair{
         return warrants[warrantId];
     }
 
+    function getLastWarrantId() public view returns (uint256) {
+        return lastWarrantId;
+    }
+
     function _getLatestPrice() internal view returns (uint256) {
         // (,int price,,,) = priceFeed.latestRoundData();
         // price is multiplied by priceFeed.decimals()
