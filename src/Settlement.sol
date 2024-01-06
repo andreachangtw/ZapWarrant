@@ -3,10 +3,10 @@ pragma solidity ^0.8.19;
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "interfaces/IWarrant.sol";
-
+import "interfaces/IWarrantPair.sol";
 
 // This contract is used for escrow, return or payment of funds between parties.
-contract Settlement is IWarrant{
+contract Settlement is IWarrant, IWarrantPair{
 
     address public baseToken;
     address public quoteToken;
@@ -20,6 +20,16 @@ contract Settlement is IWarrant{
         quoteToken = _quoteToken;
     }
 
+    function approveBaseToken(uint256 amount) public returns (bool){
+        IERC20(baseToken).approve(address(this), amount);
+        return true;
+    }
+
+    function approveQuoteToken(uint256 amount) public returns (bool){
+        IERC20(quoteToken).approve(address(this), amount);
+        return true;
+    }
+
     function escrowCall(Warrant memory warrant) public returns (bool){
         _checkValidTokensForThisVenue(warrant);
 
@@ -31,6 +41,8 @@ contract Settlement is IWarrant{
 
         // safetransfer tokens to this contract
         IERC20(baseToken).transferFrom(warrant.seller, address(this), warrant.baseAmount);
+
+        emit FundsEscrowed(warrant.id, warrant.seller, warrant.buyer, warrant.baseToken, warrant.quoteToken, warrant.warrantType, warrant.strikePrice, warrant.maturity, warrant.baseAmount, warrant.quoteAmount, warrant.premium, warrant.status);
 
         return true;
     }
@@ -47,6 +59,8 @@ contract Settlement is IWarrant{
         // safetransfer tokens to this contract
         IERC20(quoteToken).transferFrom(warrant.seller, address(this), warrant.quoteAmount);
 
+        emit FundsEscrowed(warrant.id, warrant.seller, warrant.buyer, warrant.baseToken, warrant.quoteToken, warrant.warrantType, warrant.strikePrice, warrant.maturity, warrant.baseAmount, warrant.quoteAmount, warrant.premium, warrant.status);
+
         return true;
     }
 
@@ -61,6 +75,8 @@ contract Settlement is IWarrant{
         // return base to seller
         IERC20(baseToken).transfer(warrant.seller, warrant.baseAmount);
 
+        emit FundsReleased(warrant.id, warrant.seller, warrant.buyer, warrant.baseToken, warrant.quoteToken, warrant.warrantType, warrant.strikePrice, warrant.maturity, warrant.baseAmount, warrant.quoteAmount, warrant.premium, warrant.status);
+
         return true;
     }
 
@@ -74,6 +90,8 @@ contract Settlement is IWarrant{
 
         // safetransfer tokens to this contract
         IERC20(quoteToken).transfer(warrant.seller, warrant.quoteAmount);
+
+        emit FundsReleased(warrant.id, warrant.seller, warrant.buyer, warrant.baseToken, warrant.quoteToken, warrant.warrantType, warrant.strikePrice, warrant.maturity, warrant.baseAmount, warrant.quoteAmount, warrant.premium, warrant.status);
 
         return true;
     }
@@ -90,7 +108,7 @@ contract Settlement is IWarrant{
         return true;
     }
 
-    function exerciseCall(Warrant memory warrant) public returns (bool){
+    function exerciseCallActual(Warrant memory warrant) public returns (bool){
         _checkValidTokensForThisVenue(warrant);
 
         // check allowance
@@ -99,9 +117,7 @@ contract Settlement is IWarrant{
         // seller pay base to buyer
         require(sellerBaseBalances[warrant.seller] >= warrant.baseAmount, "Seller base balance not enough");
         sellerBaseBalances[warrant.seller] -= warrant.baseAmount;
-        // transfer base to buyer
         IERC20(baseToken).transfer(warrant.buyer, warrant.baseAmount);
-        // IERC20(baseToken).transferFrom(address(this), warrant.buyer, warrant.baseAmount);
 
         // buyer pay quote to seller
         IERC20(quoteToken).transferFrom(warrant.buyer, warrant.seller, warrant.quoteAmount);
@@ -109,7 +125,7 @@ contract Settlement is IWarrant{
         return true;
     }
 
-    function exercisePut(Warrant memory warrant) public returns (bool){
+    function exercisePutActual(Warrant memory warrant) public returns (bool){
         _checkValidTokensForThisVenue(warrant);
 
         // check allowance
@@ -118,11 +134,44 @@ contract Settlement is IWarrant{
         // seller pay quote to buyer
         require(sellerQuoteBalances[warrant.seller] >= warrant.quoteAmount, "Seller quote balance not enough");
         sellerQuoteBalances[warrant.seller] -= warrant.quoteAmount;
-        // transfer quote to buyer
         IERC20(quoteToken).transfer(warrant.buyer, warrant.quoteAmount);
 
         // buyer pay base to seller
         IERC20(baseToken).transferFrom(warrant.buyer, warrant.seller, warrant.baseAmount);
+
+        return true;
+    }
+
+    function exerciseCallCash(Warrant memory warrant, uint256 latestPrice) public returns (bool){
+        _checkValidTokensForThisVenue(warrant);
+
+        // calculate settle amount
+        uint256 settleAmount = (latestPrice - warrant.strikePrice) / latestPrice * warrant.baseAmount;
+
+        // pay settleAmount to buyer and return the rest to seller
+        require(sellerBaseBalances[warrant.seller] >= warrant.baseAmount, "Seller base balance not enough");
+        sellerBaseBalances[warrant.seller] -= settleAmount;
+        IERC20(baseToken).transfer(warrant.buyer, settleAmount);
+        uint256 returnAmount = warrant.baseAmount - settleAmount;
+        sellerBaseBalances[warrant.seller] -= returnAmount;
+        IERC20(baseToken).transfer(warrant.seller, returnAmount);
+
+        return true;
+    }
+
+    function exercisePutCash(Warrant memory warrant, uint256 latestPrice) public returns (bool){
+        _checkValidTokensForThisVenue(warrant);
+
+        // calculate settle amount
+        uint256 settleAmount = (warrant.strikePrice - latestPrice) * warrant.baseAmount;
+
+        // pay settleAmount to buyer and return the rest to seller
+        require(sellerQuoteBalances[warrant.seller] >= warrant.quoteAmount, "Seller quote balance not enough");
+        sellerQuoteBalances[warrant.seller] -= settleAmount;
+        IERC20(quoteToken).transfer(warrant.buyer, settleAmount);
+        uint256 returnAmount = warrant.quoteAmount - settleAmount;
+        sellerQuoteBalances[warrant.seller] -= returnAmount;
+        IERC20(quoteToken).transfer(warrant.seller, returnAmount);
 
         return true;
     }

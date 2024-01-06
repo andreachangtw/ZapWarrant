@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.19;
 import "../interfaces/IWarrant.sol";
+import "../interfaces/IWarrantPair.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "./Settlement.sol";
 
-contract WarrantPair is IWarrant{
+contract WarrantPair is IWarrant, IWarrantPair{
 
     address public admin;
     mapping(uint256 => Warrant) public warrants;
@@ -43,6 +44,7 @@ contract WarrantPair is IWarrant{
             baseAmount: baseAmount,
             quoteAmount: strikePrice * baseAmount / (10 ** ERC20(baseToken).decimals()),
             premium: premium,
+            isCashSettled: false,
             status: WarrantStatus.INIT
         }); 
         
@@ -70,6 +72,8 @@ contract WarrantPair is IWarrant{
         warrants[warrantId] = warrant;
         lastWarrantId = warrantId;
 
+        emit WarrantListed(warrantId, msg.sender, address(0), baseToken, quoteToken, warrantType, strikePrice, maturity, baseAmount, warrant.quoteAmount, premium, WarrantStatus.ACTIVE);
+
         return true;
     }
 
@@ -95,6 +99,8 @@ contract WarrantPair is IWarrant{
         warrant.buyer = msg.sender;
         warrant.status = WarrantStatus.SOLD;
         warrants[warrantId] = warrant;
+
+        emit WarrantSold(warrantId, warrant.seller, msg.sender, baseToken, quoteToken, warrant.warrantType, warrant.strikePrice, warrant.maturity, warrant.baseAmount, warrant.quoteAmount, warrant.premium, WarrantStatus.SOLD);
 
         return true;
     }
@@ -122,38 +128,67 @@ contract WarrantPair is IWarrant{
         }
 
         // update warrant
-        warrant.status = WarrantStatus.EXPIRED;
+        warrant.status = WarrantStatus.CANCELED;
         warrants[warrantId] = warrant;
+
+        emit WarrantCanceled(warrantId, msg.sender, address(0), baseToken, quoteToken, warrant.warrantType, warrant.strikePrice, warrant.maturity, warrant.baseAmount, warrant.quoteAmount, warrant.premium, WarrantStatus.CANCELED);
 
         return true;
     }
 
-    function exerciseWarrant(uint256 warrantId) public returns (bool) {
+    function exerciseWarrant(uint256 warrantId, bool _isCashSettled) public returns (bool) {
         Warrant memory warrant = getWarrant(warrantId);
 
         // warrant status should be sold
         require(warrant.status == WarrantStatus.SOLD, "Warrant not eligible for exercise");
 
         // warrant should be mature but not over (maturity + 1) day
-        require(block.timestamp >= warrant.maturity, "Warrant not mature");
-        require(block.timestamp < warrant.maturity + 1 days, "Warrant expired");
+        require(block.timestamp >= warrant.maturity && block.timestamp < warrant.maturity + 1 days, "Warrant not mature or expired");
 
         // check buyer and seller not empty
-        require(warrant.buyer != address(0), "Buyer not exist");
-        require(warrant.seller != address(0), "Seller not exist");
+        require(warrant.buyer != address(0) && warrant.seller != address(0), "Buyer or seller not exist");
 
         // check sender is buyer
         require(warrant.buyer == msg.sender, "Sender not buyer");
 
-        // call
         if(warrant.warrantType == WarrantType.CALL) {
-            // use settlement contract to exercise and check if success
-            bool success = settlement.exerciseCall(warrant);
-            require(success, "Exercise call failed");
+            if(_isCashSettled) {
+                // check moneyness
+                uint256 latestPrice = _getLatestPrice();
+                if(warrant.strikePrice >= latestPrice) {
+                    // out of money, return call
+                    bool success = settlement.returnCall(warrant);
+                    require(success, "Return call failed");
+                } else {
+                    // use settlement contract to exercise and check if success
+                    bool success = settlement.exerciseCallCash(warrant, latestPrice);
+                    require(success, "Exercise call failed");
+                }
+                warrant.isCashSettled = true;
+            } else {
+                // use settlement contract to exercise and check if success
+                bool success = settlement.exerciseCallActual(warrant);
+                require(success, "Exercise call failed");
+            }
         } else if (warrant.warrantType == WarrantType.PUT) {
-            // use settlement contract to exercise and check if success
-            bool success = settlement.exercisePut(warrant);
-            require(success, "Exercise put failed");
+            if(_isCashSettled) {
+                // check moneyness
+                uint256 latestPrice = _getLatestPrice();
+                if(warrant.strikePrice <= latestPrice) {
+                    // out of money, return put
+                    bool success = settlement.returnPut(warrant);
+                    require(success, "Return put failed");
+                } else {
+                    // use settlement contract to exercise and check if success
+                    bool success = settlement.exercisePutCash(warrant, latestPrice);
+                    require(success, "Exercise put failed");
+                }
+                warrant.isCashSettled = true;
+            } else {
+                // use settlement contract to exercise and check if success
+                bool success = settlement.exercisePutActual(warrant);
+                require(success, "Exercise put failed");
+            }
         } else {
             revert("Warrant type not correct");
         }
@@ -161,6 +196,8 @@ contract WarrantPair is IWarrant{
         // update warrant
         warrant.status = WarrantStatus.EXERCISED;
         warrants[warrantId] = warrant;
+
+        emit WarrantExercised(warrantId, warrant.seller, warrant.buyer, baseToken, quoteToken, warrant.warrantType, warrant.strikePrice, warrant.maturity, warrant.baseAmount, warrant.quoteAmount, warrant.premium, WarrantStatus.EXERCISED);
 
         return true;
     }
@@ -195,6 +232,8 @@ contract WarrantPair is IWarrant{
         warrant.status = WarrantStatus.EXPIRED;
         warrants[warrantId] = warrant;
 
+        emit WarrantExpired(warrantId, warrant.seller, warrant.buyer, baseToken, quoteToken, warrant.warrantType, warrant.strikePrice, warrant.maturity, warrant.baseAmount, warrant.quoteAmount, warrant.premium, WarrantStatus.EXPIRED);
+
         return true;
     }
 
@@ -209,6 +248,9 @@ contract WarrantPair is IWarrant{
     function getWarrant(uint256 warrantId) public view returns (Warrant memory) {
         require(warrants[warrantId].id != 0, "Warrant not exist");
         return warrants[warrantId];
+    }
+
+    function _getLatestPrice() internal view returns (uint256) {
     }
 
 }

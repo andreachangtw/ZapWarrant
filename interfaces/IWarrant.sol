@@ -3,7 +3,7 @@ pragma solidity ^0.8.19;
 
 interface IWarrant {
     enum WarrantType { CALL, PUT }
-    enum WarrantStatus { INIT, ACTIVE, SOLD, EXPIRED, EXERCISED }
+    enum WarrantStatus { INIT, ACTIVE, CANCELED, SOLD, EXPIRED, EXERCISED }
     struct Warrant {
         uint256 id;
         address seller;
@@ -16,6 +16,7 @@ interface IWarrant {
         uint256 baseAmount;
         uint256 quoteAmount;
         uint256 premium;
+        bool isCashSettled;
         WarrantStatus status;
     }
 }

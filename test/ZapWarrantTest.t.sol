@@ -99,7 +99,7 @@ contract ZapWarrantTest is Test, IWarrant {
         vm.startPrank(buyer);
 
         // exercise warrant id 1
-        pair.exerciseWarrant(1);
+        pair.exerciseWarrant(1, false);
 
         vm.stopPrank();
 
