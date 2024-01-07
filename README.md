@@ -1,5 +1,7 @@
 # ZapWarrant
 
+ZapWarrant is an innovative decentralized protocol designed for peer-to-peer option trading on the Ethereum blockchain, focusing on ERC20 tokens. It introduces a flexible, user-driven approach to options trading, expanding the scope of financial derivatives in the crypto space.
+
 ## Summary
 
 - a protocol to let anyone list any option as long as its underlying is an ERC20 token.
@@ -118,3 +120,5 @@ In finance, a warrant and an option are similar but distinct financial instrumen
 | WarrantFactory | Manage all pairs’ address and the creation of new venue | - get warrant pair address<br>- create new pair | - WarrantPairCreated<br>- SettlementCreated |
 | WarrantPair | The pair’s main trading venue, for all the trading activities | - sell<br>- buy<br>- cancel<br>- exercise: actual or cash<br>- expire | - WarrantListed<br>- WarrantSold<br>- WarrantCanceled<br>- WarrantExercised<br>- WarrantExpired |
 | Settlement | Responsible for all the money related actions | - escrow<br>- release<br>- pay premium<br>- cash settlement<br>- actual settlement | - FundsEscrowed<br>- FundsReleased |
+
+ZapWarrant democratizes options trading by removing traditional barriers such as fixed maturities and strikes, thereby making a wider range of underlying assets accessible. It stands out for its emphasis on flexibility and user empowerment in the crypto derivatives market.
