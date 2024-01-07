@@ -18,7 +18,7 @@ ZapWarrant is an innovative decentralized protocol designed for peer-to-peer opt
 - For warrants, the theoretical price calculation is the same as option, while the seller can decide any maturity and strike.
 - Currently underlying assets for option are quite limited to main coins such as BTC and ETH, hopefully more people will list options on RWA tokens.
 
-![Untitled](Appworks%20Final%20Project%2001e45ebb620d44c2909e2bd2ecf6ca43/Untitled.png)
+![Option pricing](https://github.com/andreachangtw/ZapWarrant/blob/main/reference/Option%20pricing.png)
 
 ### Background introduction on option and warrant
 
@@ -89,11 +89,11 @@ In finance, a warrant and an option are similar but distinct financial instrumen
 
 #### Warrant lifcycle
 
-![Untitled](Appworks%20Final%20Project%2001e45ebb620d44c2909e2bd2ecf6ca43/Untitled%201.png)
+![Lifcycle](https://github.com/andreachangtw/ZapWarrant/blob/main/reference/Warrant%20lifecycle.png)
 
 #### Contracts relationships
 
-[https://imgr.whimsical.com/object/AS21J9tDBmTmEzip1mLUMj](https://imgr.whimsical.com/object/AS21J9tDBmTmEzip1mLUMj)
+![Contracts relationship](https://github.com/andreachangtw/ZapWarrant/blob/main/reference/Contracts%20relationship.png)
 
 ### Core components
 
